@@ -1,0 +1,851 @@
+{
+    "dataRoles": [
+        {
+            "displayName": "User Name",
+            "name": "username",
+            "kind": "GroupingOrMeasure",
+            "description": "Drag a username or display name field here to personalise the chat greeting"
+        }
+    ],
+    "objects": {
+        "aiConfig": {
+            "displayName": "AI Configuration",
+            "properties": {
+                "endpointUrl": {
+                    "displayName": "API Endpoint URL",
+                    "description": "Full URL of the AI provider endpoint.",
+                    "type": {
+                        "text": true
+                    }
+                },
+                "apiKey": {
+                    "displayName": "API Key",
+                    "description": "API key for the selected provider.",
+                    "type": {
+                        "text": true
+                    }
+                },
+                "modelName": {
+                    "displayName": "Model Name",
+                    "description": "Model identifier (e.g. gpt-4o-mini).",
+                    "type": {
+                        "text": true
+                    }
+                },
+                "systemPrompt": {
+                    "displayName": "System Prompt",
+                    "description": "Customise the assistant behaviour.",
+                    "type": {
+                        "text": true
+                    }
+                }
+            }
+        },
+        "header": {
+            "displayName": "Header",
+            "properties": {
+                "backgroundColor": {
+                    "displayName": "Background Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "height": {
+                    "displayName": "Height (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "paddingH": {
+                    "displayName": "Horizontal Padding (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "logoTextColor": {
+                    "displayName": "Logo / Title Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "subtitleColor": {
+                    "displayName": "Subtitle Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "fontFamily": {
+                    "displayName": "Font Family",
+                    "type": {
+                        "enumeration": [
+                            {
+                                "value": "",
+                                "displayName": "Default (System)"
+                            },
+                            {
+                                "value": "Segoe UI",
+                                "displayName": "Segoe UI"
+                            },
+                            {
+                                "value": "Calibri",
+                                "displayName": "Calibri"
+                            },
+                            {
+                                "value": "Arial",
+                                "displayName": "Arial"
+                            },
+                            {
+                                "value": "Helvetica",
+                                "displayName": "Helvetica"
+                            },
+                            {
+                                "value": "Verdana",
+                                "displayName": "Verdana"
+                            },
+                            {
+                                "value": "Trebuchet MS",
+                                "displayName": "Trebuchet MS"
+                            },
+                            {
+                                "value": "Georgia",
+                                "displayName": "Georgia"
+                            },
+                            {
+                                "value": "Times New Roman",
+                                "displayName": "Times New Roman"
+                            },
+                            {
+                                "value": "Garamond",
+                                "displayName": "Garamond"
+                            },
+                            {
+                                "value": "Tahoma",
+                                "displayName": "Tahoma"
+                            },
+                            {
+                                "value": "Century Gothic",
+                                "displayName": "Century Gothic"
+                            },
+                            {
+                                "value": "Gill Sans",
+                                "displayName": "Gill Sans"
+                            }
+                        ]
+                    }
+                },
+                "fontSizeTitle": {
+                    "displayName": "Title Font Size (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "fontSizeSubtitle": {
+                    "displayName": "Subtitle Font Size (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "greetingColor": {
+                    "displayName": "User Greeting Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "borderColor": {
+                    "displayName": "Bottom Border Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "userSection": {
+            "displayName": "User Section",
+            "properties": {
+                "historyBg": {
+                    "displayName": "History Button Background",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "historyColor": {
+                    "displayName": "History Button Text Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "borderRadius": {
+                    "displayName": "Border Radius (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "hoverColor": {
+                    "displayName": "Hover Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "iconColor": {
+                    "displayName": "Icon Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "content": {
+            "displayName": "Content Area",
+            "properties": {
+                "backgroundColor": {
+                    "displayName": "Canvas Background",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "sectionSpacing": {
+                    "displayName": "Section Spacing (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "titleColor": {
+                    "displayName": "Title Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "titleFontSize": {
+                    "displayName": "Title Font Size (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "titleFontWeight": {
+                    "displayName": "Title Font Weight",
+                    "type": {
+                        "enumeration": [
+                            {
+                                "value": "400",
+                                "displayName": "Regular"
+                            },
+                            {
+                                "value": "600",
+                                "displayName": "Semi-Bold"
+                            },
+                            {
+                                "value": "700",
+                                "displayName": "Bold"
+                            }
+                        ]
+                    }
+                },
+                "subtitleColor": {
+                    "displayName": "Subtitle Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "subtitleFontSize": {
+                    "displayName": "Subtitle Font Size (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "letterSpacing": {
+                    "displayName": "Subtitle Letter Spacing",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "descColor": {
+                    "displayName": "Description Text Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "descFontSize": {
+                    "displayName": "Description Font Size (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "lineHeight": {
+                    "displayName": "Description Line Height",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "textAlign": {
+                    "displayName": "Text Alignment",
+                    "type": {
+                        "enumeration": [
+                            {
+                                "value": "left",
+                                "displayName": "Left"
+                            },
+                            {
+                                "value": "center",
+                                "displayName": "Center"
+                            },
+                            {
+                                "value": "right",
+                                "displayName": "Right"
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        "chatInput": {
+            "displayName": "Chat Input",
+            "properties": {
+                "backgroundColor": {
+                    "displayName": "Background Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "borderColor": {
+                    "displayName": "Border Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "borderRadius": {
+                    "displayName": "Border Radius (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "placeholderColor": {
+                    "displayName": "Placeholder Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "padding": {
+                    "displayName": "Padding (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                }
+            }
+        },
+        "sendButton": {
+            "displayName": "Send Button",
+            "properties": {
+                "backgroundColor": {
+                    "displayName": "Background Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "iconColor": {
+                    "displayName": "Icon Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "hoverBackground": {
+                    "displayName": "Hover Background Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "borderRadius": {
+                    "displayName": "Border Radius (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "width": {
+                    "displayName": "Width (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "height": {
+                    "displayName": "Height (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                }
+            }
+        },
+        "sharedTextStyle": {
+            "displayName": "Shared Text Styling",
+            "properties": {
+                "fontFamily": {
+                    "displayName": "Font Family",
+                    "type": {
+                        "enumeration": [
+                            {
+                                "value": "",
+                                "displayName": "Default (System)"
+                            },
+                            {
+                                "value": "Segoe UI",
+                                "displayName": "Segoe UI"
+                            },
+                            {
+                                "value": "Calibri",
+                                "displayName": "Calibri"
+                            },
+                            {
+                                "value": "Arial",
+                                "displayName": "Arial"
+                            },
+                            {
+                                "value": "Helvetica",
+                                "displayName": "Helvetica"
+                            },
+                            {
+                                "value": "Verdana",
+                                "displayName": "Verdana"
+                            },
+                            {
+                                "value": "Trebuchet MS",
+                                "displayName": "Trebuchet MS"
+                            },
+                            {
+                                "value": "Georgia",
+                                "displayName": "Georgia"
+                            },
+                            {
+                                "value": "Times New Roman",
+                                "displayName": "Times New Roman"
+                            },
+                            {
+                                "value": "Garamond",
+                                "displayName": "Garamond"
+                            },
+                            {
+                                "value": "Tahoma",
+                                "displayName": "Tahoma"
+                            },
+                            {
+                                "value": "Century Gothic",
+                                "displayName": "Century Gothic"
+                            },
+                            {
+                                "value": "Gill Sans",
+                                "displayName": "Gill Sans"
+                            }
+                        ]
+                    }
+                },
+                "fontSize": {
+                    "displayName": "Font Size (px)",
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "fontWeight": {
+                    "displayName": "Font Weight",
+                    "type": {
+                        "enumeration": [
+                            {
+                                "value": "300",
+                                "displayName": "Light"
+                            },
+                            {
+                                "value": "400",
+                                "displayName": "Regular"
+                            },
+                            {
+                                "value": "500",
+                                "displayName": "Medium"
+                            },
+                            {
+                                "value": "600",
+                                "displayName": "Semi-Bold"
+                            },
+                            {
+                                "value": "700",
+                                "displayName": "Bold"
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        "inputSection": {
+            "displayName": "Input Section",
+            "properties": {
+                "fontColor": {
+                    "displayName": "Font Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "backgroundColor": {
+                    "displayName": "Background Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "responseSection": {
+            "displayName": "Response Section",
+            "properties": {
+                "fontColor": {
+                    "displayName": "Font Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "backgroundColor": {
+                    "displayName": "Background Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "userLogo": {
+            "displayName": "User Avatar",
+            "properties": {
+                "backgroundColor": {
+                    "displayName": "Background Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "textColor": {
+                    "displayName": "Text Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "fontWeight": {
+                    "displayName": "Font Weight",
+                    "type": {
+                        "enumeration": [
+                            {
+                                "value": "300",
+                                "displayName": "Light"
+                            },
+                            {
+                                "value": "400",
+                                "displayName": "Regular"
+                            },
+                            {
+                                "value": "500",
+                                "displayName": "Medium"
+                            },
+                            {
+                                "value": "600",
+                                "displayName": "Semi-Bold"
+                            },
+                            {
+                                "value": "700",
+                                "displayName": "Bold"
+                            }
+                        ]
+                    }
+                },
+                "fontFamily": {
+                    "displayName": "Font Family",
+                    "type": {
+                        "enumeration": [
+                            {
+                                "value": "",
+                                "displayName": "Default (System)"
+                            },
+                            {
+                                "value": "Segoe UI",
+                                "displayName": "Segoe UI"
+                            },
+                            {
+                                "value": "Calibri",
+                                "displayName": "Calibri"
+                            },
+                            {
+                                "value": "Arial",
+                                "displayName": "Arial"
+                            },
+                            {
+                                "value": "Helvetica",
+                                "displayName": "Helvetica"
+                            },
+                            {
+                                "value": "Verdana",
+                                "displayName": "Verdana"
+                            },
+                            {
+                                "value": "Trebuchet MS",
+                                "displayName": "Trebuchet MS"
+                            },
+                            {
+                                "value": "Georgia",
+                                "displayName": "Georgia"
+                            },
+                            {
+                                "value": "Times New Roman",
+                                "displayName": "Times New Roman"
+                            },
+                            {
+                                "value": "Garamond",
+                                "displayName": "Garamond"
+                            },
+                            {
+                                "value": "Tahoma",
+                                "displayName": "Tahoma"
+                            },
+                            {
+                                "value": "Century Gothic",
+                                "displayName": "Century Gothic"
+                            },
+                            {
+                                "value": "Gill Sans",
+                                "displayName": "Gill Sans"
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        "aiLogo": {
+            "displayName": "AI Response Avatar",
+            "properties": {
+                "backgroundColor": {
+                    "displayName": "Background Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "textColor": {
+                    "displayName": "Text Color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "fontWeight": {
+                    "displayName": "Font Weight",
+                    "type": {
+                        "enumeration": [
+                            {
+                                "value": "300",
+                                "displayName": "Light"
+                            },
+                            {
+                                "value": "400",
+                                "displayName": "Regular"
+                            },
+                            {
+                                "value": "500",
+                                "displayName": "Medium"
+                            },
+                            {
+                                "value": "600",
+                                "displayName": "Semi-Bold"
+                            },
+                            {
+                                "value": "700",
+                                "displayName": "Bold"
+                            }
+                        ]
+                    }
+                },
+                "fontFamily": {
+                    "displayName": "Font Family",
+                    "type": {
+                        "enumeration": [
+                            {
+                                "value": "",
+                                "displayName": "Default (System)"
+                            },
+                            {
+                                "value": "Segoe UI",
+                                "displayName": "Segoe UI"
+                            },
+                            {
+                                "value": "Calibri",
+                                "displayName": "Calibri"
+                            },
+                            {
+                                "value": "Arial",
+                                "displayName": "Arial"
+                            },
+                            {
+                                "value": "Helvetica",
+                                "displayName": "Helvetica"
+                            },
+                            {
+                                "value": "Verdana",
+                                "displayName": "Verdana"
+                            },
+                            {
+                                "value": "Trebuchet MS",
+                                "displayName": "Trebuchet MS"
+                            },
+                            {
+                                "value": "Georgia",
+                                "displayName": "Georgia"
+                            },
+                            {
+                                "value": "Times New Roman",
+                                "displayName": "Times New Roman"
+                            },
+                            {
+                                "value": "Garamond",
+                                "displayName": "Garamond"
+                            },
+                            {
+                                "value": "Tahoma",
+                                "displayName": "Tahoma"
+                            },
+                            {
+                                "value": "Century Gothic",
+                                "displayName": "Century Gothic"
+                            },
+                            {
+                                "value": "Gill Sans",
+                                "displayName": "Gill Sans"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    "dataViewMappings": [
+        {
+            "categorical": {
+                "categories": {
+                    "for": {
+                        "in": "username"
+                    },
+                    "dataReductionAlgorithm": {
+                        "top": {
+                            "count": 1
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "privileges": [
+        {
+            "name": "WebAccess",
+            "essential": true,
+            "parameters": [
+                "https://anuritchatbackend.vercel.app",
+                "https://generativelanguage.googleapis.com",
+                "https://api.openai.com",
+                "https://api.anthropic.com"
+            ]
+        }
+    ],
+    "suppressDefaultTitle": true
+}
