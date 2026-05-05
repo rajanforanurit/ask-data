@@ -7,7 +7,7 @@ import { MODEL_LISTS } from "./types";
 
 export function detectProvider(url: string): DetectedProvider {
     const u = url.toLowerCase();
-    if (u.includes("anuritchatbackend.vercel.app"))
+    if (u.includes("anuritchatbackend.vercel.app") || u.includes("ask-data-response-model") || u.includes("azurewebsites.net"))
         return { type: "anurit",    label: "Ask Data",  color: "#b8955a", defaultModel: "Ask Data MiniLLM",          modelOptions: MODEL_LISTS.anurit,    lockModel: true,  lockPrompt: true  };
     if (u.includes("openai.com"))
         return { type: "openai",    label: "OpenAI",           color: "#10A37F", defaultModel: "gpt-4o-mini",             modelOptions: MODEL_LISTS.openai,    lockModel: false, lockPrompt: false };
@@ -20,15 +20,42 @@ export function detectProvider(url: string): DetectedProvider {
 
 // ── Markdown renderer ────────────────────────────────────────────────────────
 
+// Matches any http/https URL, including long Power BI URLs with query strings.
+// We extract these BEFORE HTML-escaping so & and other chars are never mangled.
+const RAW_URL_REGEX = /https?:\/\/[^\s<>"']+/g;
+
 export function esc(s: string): string {
     return String(s || "")
         .replace(/&/g, "&amp;").replace(/</g, "&lt;")
         .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/**
+ * Convert markdown text → safe HTML.
+ *
+ * URL-preservation strategy:
+ *   1. Pull all raw URLs out of the text first (before any escaping).
+ *   2. Replace them with placeholders like __URL_0__, __URL_1__, …
+ *   3. Run the normal esc() + markdown pipeline on the URL-free text.
+ *   4. Swap the placeholders back in as proper <a> tags — URLs are never
+ *      touched by esc(), so & / ? / = / # are always intact.
+ */
 export function md(t: string): string {
     if (!t) return "";
-    let s = esc(t);
+
+    // Step 1 – extract URLs → placeholders
+    const extractedUrls: string[] = [];
+    const textWithPlaceholders = t.replace(RAW_URL_REGEX, (url) => {
+        // Strip trailing punctuation that isn't part of the URL
+        const clean = url.replace(/[.,;:!?)'">\]]+$/, "");
+        const suffix = url.slice(clean.length);
+        extractedUrls.push(clean);
+        return `__URL_${extractedUrls.length - 1}__${suffix}`;
+    });
+
+    // Step 2 – standard markdown → HTML (URLs are now just placeholder tokens)
+    let s = esc(textWithPlaceholders);
+
     s = s.replace(/```[\s\S]*?```/g, (m) => {
         const inner = m.replace(/^```\w*\n?/, "").replace(/\n?```$/, "");
         return `<pre><code>${inner}</code></pre>`;
@@ -44,12 +71,23 @@ export function md(t: string): string {
         const items = block.split("\n").filter((l) => l.trim());
         return `<ol>${items.map((l) => `<li>${l.replace(/^[ \t]*\d+\.[ \t]/, "")}</li>`).join("")}</ol>`;
     });
-    return s.split(/\n\n+/).map((block) => {
+    s = s.split(/\n\n+/).map((block) => {
         block = block.trim();
         if (!block) return "";
         if (block.startsWith("<ul") || block.startsWith("<ol") || block.startsWith("<pre")) return block;
         return `<p>${block.replace(/\n/g, "<br>")}</p>`;
     }).join("");
+
+    // Step 3 – restore URLs as clickable <a> tags (URLs never went through esc)
+    s = s.replace(/__URL_(\d+)__/g, (_match, idx: string) => {
+        const url = extractedUrls[Number(idx)];
+        if (!url) return "";
+        // Encode & in the href attribute value only (not the display text)
+        const safeHref = url.replace(/&/g, "&amp;");
+        return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="ac-link">${url}</a>`;
+    });
+
+    return s;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

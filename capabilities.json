@@ -840,11 +840,11 @@
             "name": "WebAccess",
             "essential": true,
             "parameters": [
-                "https://anuritchatbackend.vercel.app",
+                "https://ask-data-response-model-gxb7aagkhqgpgvdr.canadacentral-01.azurewebsites.net",
                 "https://generativelanguage.googleapis.com",
                 "https://api.openai.com",
                 "https://api.anthropic.com"
-            ]
+]
         }
     ],
     "suppressDefaultTitle": true

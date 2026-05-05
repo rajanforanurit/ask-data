@@ -62,13 +62,15 @@ const CheckIcon: FC = () => (
         <polyline points="20 6 9 17 4 12" />
     </svg>
 );
-const URL_REGEX = /(https?:\/\/[^\s<>"']+|www\.[a-zA-Z0-9-]+(?:\.[a-zA-Z]{2,})+(?:\/[^\s<>"']*)?|[a-zA-Z0-9][a-zA-Z0-9-]*\.(?:com|org|net|io|dev|ai|co|app|edu|gov|info|biz|me)(?:\/[^\s<>"']*)?(?=[\s<>.,;:!?)"'\]]|$))/g;
+// Only match bare domain URLs (no http/https prefix) — full https:// URLs are
+// already converted to <a> tags inside md() before linkifyHtml runs.
+const BARE_URL_REGEX = /(www\.[a-zA-Z0-9-]+(?:\.[a-zA-Z]{2,})+(?:\/[^\s<>"']*)?|[a-zA-Z0-9][a-zA-Z0-9-]*\.(?:com|org|net|io|dev|ai|co|app|edu|gov|info|biz|me)(?:\/[^\s<>"']*)?)/g;
 
 export function linkifyHtml(html: string): string {
     return html.replace(/>([^<]+)</g, (match, textContent: string) => {
-        const linked = textContent.replace(URL_REGEX, (url: string) => {
+        const linked = textContent.replace(BARE_URL_REGEX, (url: string) => {
             if (!url.includes(".")) return url;
-            const href = url.startsWith("http") ? url : `https://${url}`;
+            const href = `https://${url}`;
             return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="ac-link">${url}</a>`;
         });
         return `>${linked}<`;

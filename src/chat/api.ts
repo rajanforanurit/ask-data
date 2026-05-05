@@ -1,4 +1,4 @@
-import { ASKDATA_API as ANURIT_API, TOP_K, TEMPERATURE, MAX_TOKENS } from "./types";
+import { ASKDATA_API, TOP_K, TEMPERATURE, MAX_TOKENS } from "./types";
 import type { Session, Source } from "./types";
 import { detectProvider } from "./utils";
 
@@ -24,7 +24,7 @@ export async function verifyEndpoint(
 
     switch (prov.type) {
         case "anurit": {
-            const r = await fetch(`${ANURIT_API}/chat/login`, {
+            const r = await fetch(`${ASKDATA_API}/chat/login`, {
                 method:  "POST",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
                 body:    JSON.stringify({ apiKey }),
@@ -102,7 +102,7 @@ export async function sendMessage(
 
     switch (prov.type) {
         case "anurit": {
-            const r = await fetch(`${ANURIT_API}/chat/message`, {
+            const r = await fetch(`${ASKDATA_API}/chat/message`, {
                 method:  "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.apiKey}` },
                 body:    JSON.stringify({ query, topK: TOP_K, conversationId }),
@@ -194,7 +194,7 @@ export async function sendMessage(
 // ── Conversation CRUD (Ask Data only) ───────────────────────────────────────────
 
 export async function apiListConversations(apiKey: string) {
-    const r = await fetch(`${ANURIT_API}/chat/conversations/list`, {
+    const r = await fetch(`${ASKDATA_API}/chat/conversations/list`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     });
@@ -203,7 +203,7 @@ export async function apiListConversations(apiKey: string) {
 }
 
 export async function apiGetConversation(apiKey: string, conversationId: string) {
-    const r = await fetch(`${ANURIT_API}/chat/conversations/get`, {
+    const r = await fetch(`${ASKDATA_API}/chat/conversations/get`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body:    JSON.stringify({ conversationId }),
@@ -213,7 +213,7 @@ export async function apiGetConversation(apiKey: string, conversationId: string)
 }
 
 export async function apiDeleteConversation(apiKey: string, conversationId: string) {
-    const r = await fetch(`${ANURIT_API}/chat/conversations/delete`, {
+    const r = await fetch(`${ASKDATA_API}/chat/conversations/delete`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body:    JSON.stringify({ conversationId }),
@@ -222,7 +222,7 @@ export async function apiDeleteConversation(apiKey: string, conversationId: stri
 }
 
 export async function apiRenameConversation(apiKey: string, conversationId: string, title: string) {
-    const r = await fetch(`${ANURIT_API}/chat/conversations/rename`, {
+    const r = await fetch(`${ASKDATA_API}/chat/conversations/rename`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body:    JSON.stringify({ conversationId, title }),
@@ -232,7 +232,7 @@ export async function apiRenameConversation(apiKey: string, conversationId: stri
 
 export async function apiVerifySession(apiKey: string): Promise<boolean> {
     try {
-        const r = await fetch(`${ANURIT_API}/client/verify`, {
+        const r = await fetch(`${ASKDATA_API}/client/verify`, {
             method:  "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         });
