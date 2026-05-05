@@ -1,11 +1,7 @@
-// ─── HistorySidebar.tsx — conversation list drawer ────────────────────────────
-
-import { useState, type FC } from "react";
+import { useState } from "react";
+import type { FC } from "react";
 import type { Conversation } from "./types";
 import { formatHistDate } from "./utils";
-
-// ── Single history item ───────────────────────────────────────────────────────
-
 interface HistoryItemProps {
     conv:     Conversation;
     isActive: boolean;
@@ -13,15 +9,65 @@ interface HistoryItemProps {
     onRename: (id: string) => void;
     onDelete: (id: string) => void;
 }
-
 const HistoryItem: FC<HistoryItemProps> = ({ conv, isActive, onOpen, onRename, onDelete }) => {
-    const [hovered, setHovered] = useState(false);
+    const [hovered, setHovered]             = useState(false);
+    const [confirmingDelete, setConfirming] = useState(false);
     const date = formatHistDate(conv.updatedAt ?? conv.createdAt);
+
+    function handleDeleteClick(e: React.MouseEvent) {
+        e.stopPropagation();
+        setConfirming(true);
+    }
+
+    function handleConfirmDelete(e: React.MouseEvent) {
+        e.stopPropagation();
+        setConfirming(false);
+        onDelete(conv._id);
+    }
+
+    function handleCancelDelete(e: React.MouseEvent) {
+        e.stopPropagation();
+        setConfirming(false);
+    }
+    if (confirmingDelete) {
+        return (
+            <div
+                style={{
+                    display:       "flex",
+                    alignItems:    "center",
+                    justifyContent:"space-between",
+                    borderRadius:  3,
+                    background:    "#fff1f0",
+                    border:        "1px solid #fca5a5",
+                    padding:       "6px 8px",
+                    gap:           6,
+                }}
+            >
+                <span style={{ fontSize:".8em",color:"#b91c1c",fontFamily:"var(--ac-sans)",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                    Delete "{conv.title ?? "Untitled"}"?
+                </span>
+                <div style={{ display:"flex",gap:4,flexShrink:0 }}>
+                    <button
+                        onClick={handleConfirmDelete}
+                        style={{ background:"#ef4444",border:"none",borderRadius:3,padding:"2px 8px",cursor:"pointer",fontSize:".75em",fontWeight:600,color:"#fff",fontFamily:"var(--ac-sans)" }}
+                    >
+                        Delete
+                    </button>
+                    <button
+                        onClick={handleCancelDelete}
+                        style={{ background:"none",border:"1px solid var(--ac-border2)",borderRadius:3,padding:"2px 7px",cursor:"pointer",fontSize:".75em",fontWeight:500,color:"var(--ac-text3)",fontFamily:"var(--ac-sans)" }}
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        );
+    }
     return (
         <div
             onClick={() => onOpen(conv._id)}
             onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
+            onMouseLeave={() => { setHovered(false); }}
             style={{ display:"flex",alignItems:"center",borderRadius:3,background:isActive?"var(--ac-gold-light)":hovered?"var(--ac-surface2)":"transparent",border:isActive?"1px solid var(--ac-gold-glow)":"1px solid transparent",cursor:"pointer",transition:"background .12s,border-color .12s" }}
         >
             <div style={{ flex:1,padding:"7px 8px",minWidth:0 }}>
@@ -32,29 +78,36 @@ const HistoryItem: FC<HistoryItemProps> = ({ conv, isActive, onOpen, onRename, o
             </div>
             {hovered && (
                 <div style={{ display:"flex",flexShrink:0,alignItems:"center",gap:1,paddingRight:4 }}>
-                    <button onClick={e=>{e.stopPropagation();onRename(conv._id);}} style={{ background:"none",border:"none",cursor:"pointer",padding:"3px 4px",borderRadius:3,fontSize:".8em",color:"var(--ac-text3)" }} title="Rename">✏️</button>
-                    <button onClick={e=>{e.stopPropagation();onDelete(conv._id);}} style={{ background:"none",border:"none",cursor:"pointer",padding:"3px 4px",borderRadius:3,fontSize:".8em",color:"var(--ac-text3)" }} title="Delete">🗑️</button>
+                    <button
+                        onClick={e => { e.stopPropagation(); onRename(conv._id); }}
+                        style={{ background:"none",border:"none",cursor:"pointer",padding:"3px 4px",borderRadius:3,fontSize:".8em",color:"var(--ac-text3)" }}
+                        title="Rename"
+                    >✏️</button>
+                    <button
+                        onClick={handleDeleteClick}
+                        style={{ background:"none",border:"none",cursor:"pointer",padding:"3px 4px",borderRadius:3,fontSize:".8em",color:"var(--ac-text3)",transition:"color .12s" }}
+                        onMouseEnter={e => e.currentTarget.style.color="#ef4444"}
+                        onMouseLeave={e => e.currentTarget.style.color="var(--ac-text3)"}
+                        title="Delete"
+                    >🗑️</button>
                 </div>
             )}
         </div>
     );
 };
-
-// ── Sidebar ───────────────────────────────────────────────────────────────────
-
 interface HistorySidebarProps {
-    open:          boolean;
-    conversations: Conversation[];
-    activeConvId:  string | null;
-    renaming:      { id: string; value: string } | null;
-    onClose:       () => void;
-    onNewChat:     () => void;
-    onOpen:        (id: string) => void;
-    onRename:      (id: string) => void;
-    onDelete:      (id: string) => void;
-    onRenameChange:(value: string) => void;
-    onRenameCommit:(id: string, value: string) => void;
-    onRenameCancel:() => void;
+    open:           boolean;
+    conversations:  Conversation[];
+    activeConvId:   string | null;
+    renaming:       { id: string; value: string } | null;
+    onClose:        () => void;
+    onNewChat:      () => void;
+    onOpen:         (id: string) => void;
+    onRename:       (id: string) => void;
+    onDelete:       (id: string) => void;
+    onRenameChange: (value: string) => void;
+    onRenameCommit: (id: string, value: string) => void;
+    onRenameCancel: () => void;
 }
 
 export const HistorySidebar: FC<HistorySidebarProps> = ({
@@ -71,8 +124,6 @@ export const HistorySidebar: FC<HistorySidebarProps> = ({
                 <button onClick={onClose}    style={{ background:"none",border:"1px solid var(--ac-border2)",borderRadius:3,padding:"3px 8px",cursor:"pointer",fontSize:".78em",fontWeight:600,color:"var(--ac-text3)",letterSpacing:".03em",textTransform:"uppercase" }}>✕</button>
             </div>
         </div>
-
-        {/* Conversation list */}
         <div style={{ flex:1,overflowY:"auto",padding:6,display:"flex",flexDirection:"column",gap:2 }}>
             {conversations.length === 0 ? (
                 <div style={{ display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:20,textAlign:"center" }}>

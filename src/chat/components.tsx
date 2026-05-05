@@ -1,4 +1,4 @@
-import { useState, type FC } from "react";
+import { useState, useCallback, type FC } from "react";
 import type { UIMessage, Source } from "./types";
 import type { ResolvedTheme } from "./styles";
 import { md, esc, estimateTokens } from "./utils";
@@ -50,7 +50,93 @@ export const SourceAccordion: FC<{ sources: Source[] }> = ({ sources }) => {
         </div>
     );
 };
+const CopyIcon: FC = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+);
 
+const CheckIcon: FC = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12" />
+    </svg>
+);
+const URL_REGEX = /(https?:\/\/[^\s<>"']+|www\.[a-zA-Z0-9-]+(?:\.[a-zA-Z]{2,})+(?:\/[^\s<>"']*)?|[a-zA-Z0-9][a-zA-Z0-9-]*\.(?:com|org|net|io|dev|ai|co|app|edu|gov|info|biz|me)(?:\/[^\s<>"']*)?(?=[\s<>.,;:!?)"'\]]|$))/g;
+
+export function linkifyHtml(html: string): string {
+    return html.replace(/>([^<]+)</g, (match, textContent: string) => {
+        const linked = textContent.replace(URL_REGEX, (url: string) => {
+            if (!url.includes(".")) return url;
+            const href = url.startsWith("http") ? url : `https://${url}`;
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="ac-link">${url}</a>`;
+        });
+        return `>${linked}<`;
+    });
+}
+const CopyButton: FC<{ content: string }> = ({ content }) => {
+    const [copied, setCopied] = useState(false);
+    const handleCopy = useCallback(async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        try {
+            await navigator.clipboard.writeText(content);
+        } catch {
+            // Fallback for environments without clipboard API
+            const ta = document.createElement("textarea");
+            ta.value = content;
+            ta.style.cssText = "position:fixed;opacity:0;pointer-events:none;";
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try { document.execCommand("copy"); } catch { /* ignore */ }
+            document.body.removeChild(ta);
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    }, [content]);
+
+    return (
+        <button
+            onClick={handleCopy}
+            title={copied ? "Copied!" : "Copy response"}
+            style={{
+                position:    "absolute",
+                top:         8,
+                right:       8,
+                display:     "flex",
+                alignItems:  "center",
+                gap:         4,
+                background:  copied ? "var(--ac-gold-light, #fdf6e3)" : "var(--ac-surface, #fff)",
+                border:      `1px solid ${copied ? "var(--ac-gold, #b8955a)" : "var(--ac-border, #e2e8f0)"}`,
+                borderRadius:4,
+                padding:     "3px 7px",
+                cursor:      "pointer",
+                fontSize:    ".72em",
+                fontFamily:  "var(--ac-sans)",
+                fontWeight:  500,
+                color:       copied ? "var(--ac-gold, #b8955a)" : "var(--ac-text3, #888)",
+                transition:  "all .15s",
+                whiteSpace:  "nowrap",
+                zIndex:      2,
+            }}
+            onMouseEnter={e => {
+                if (!copied) {
+                    e.currentTarget.style.borderColor = "var(--ac-gold, #b8955a)";
+                    e.currentTarget.style.color = "var(--ac-gold, #b8955a)";
+                }
+            }}
+            onMouseLeave={e => {
+                if (!copied) {
+                    e.currentTarget.style.borderColor = "var(--ac-border, #e2e8f0)";
+                    e.currentTarget.style.color = "var(--ac-text3, #888)";
+                }
+            }}
+        >
+            {copied ? <CheckIcon /> : <CopyIcon />}
+            {copied ? "Copied!" : "Copy"}
+        </button>
+    );
+};
 interface MsgBubbleProps {
     msg:           UIMessage;
     initials:      string;
@@ -60,6 +146,7 @@ interface MsgBubbleProps {
 }
 
 export const MessageBubble: FC<MsgBubbleProps> = ({ msg, initials, providerLabel, providerColor, theme }) => {
+    const [hovered, setHovered] = useState(false);
     const isUser     = msg.role === "user";
     const ts         = msg.timestamp.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
     const tokenCount = msg.tokenCount ?? (msg.content ? estimateTokens(msg.content) : 0);
@@ -70,21 +157,19 @@ export const MessageBubble: FC<MsgBubbleProps> = ({ msg, initials, providerLabel
         fontWeight:  st.fontWeight,
     };
     const bubbleColors = isUser ? theme.inputStyle : theme.responseStyle;
-
-    // Avatar logo styles
     const logoStyle = isUser ? theme.userLogo : theme.aiLogo;
     const avatarFontFamily = logoStyle.fontFamily
         ? `'${logoStyle.fontFamily}', var(--ac-sans)`
         : "var(--ac-serif)";
+    const renderedHtml = (!isUser && !msg.isTyping && msg.content)
+        ? linkifyHtml(md(msg.content))
+        : "";
 
     return (
         <div style={{ display:"flex",gap:8,animation:"ac-msgIn .22s cubic-bezier(.16,1,.3,1)",alignSelf:isUser?"flex-end":"flex-start",flexDirection:isUser?"row-reverse":"row",maxWidth:isUser?"85%":"100%" }}>
-            {/* Avatar */}
             <div style={{ width:26,height:26,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:".85em",fontWeight:logoStyle.fontWeight,borderRadius:3,background:logoStyle.backgroundColor,color:logoStyle.textColor,fontFamily:avatarFontFamily }}>
                 {isUser ? initials : providerLabel[0]?.toUpperCase() ?? "A"}
             </div>
-
-            {/* Content */}
             <div style={{ minWidth:0,maxWidth:"100%" }}>
                 {msg.isTyping ? (
                     <div style={{ display:"flex",alignItems:"center",gap:4,padding:"8px 12px",background:"var(--ac-surface)",border:"1px solid var(--ac-border)",borderRadius:3 }}>
@@ -93,7 +178,6 @@ export const MessageBubble: FC<MsgBubbleProps> = ({ msg, initials, providerLabel
                         ))}
                     </div>
                 ) : isUser ? (
-                    // ── User (input) bubble ───────────────────────────────────
                     <div style={{
                         ...sharedFont,
                         color:           bubbleColors.color,
@@ -103,11 +187,19 @@ export const MessageBubble: FC<MsgBubbleProps> = ({ msg, initials, providerLabel
                         {msg.content}
                     </div>
                 ) : (
-                    // ── Assistant (response) bubble ───────────────────────────
-                    <div style={{
-                        backgroundColor: bubbleColors.backgroundColor,
-                        border:"1px solid var(--ac-border)",borderRadius:3,padding:"10px 12px",
-                    }}>
+                    <div
+                        onMouseEnter={() => setHovered(true)}
+                        onMouseLeave={() => setHovered(false)}
+                        style={{
+                            position:        "relative",
+                            backgroundColor: bubbleColors.backgroundColor,
+                            border:          "1px solid var(--ac-border)",
+                            borderRadius:    3,
+                            padding:         "10px 12px",
+                        }}
+                    >
+                        {hovered && <CopyButton content={msg.content} />}
+
                         <div
                             className="ac-asst-text"
                             style={{
@@ -115,8 +207,10 @@ export const MessageBubble: FC<MsgBubbleProps> = ({ msg, initials, providerLabel
                                 lineHeight: theme.content.lineHeight,
                                 color:      bubbleColors.color,
                                 wordBreak:  "break-word",
+                                marginTop:  hovered ? 22 : 0,
+                                transition: "margin-top .12s",
                             }}
-                            dangerouslySetInnerHTML={{ __html: md(msg.content) }}
+                            dangerouslySetInnerHTML={{ __html: renderedHtml }}
                         />
                         {theme.showTokenCount && !msg.isTyping && (
                             <div style={{ marginTop:6,fontSize:".75em",color:"var(--ac-text3)",fontFamily:"var(--ac-mono)" }}>
