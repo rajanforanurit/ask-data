@@ -1,6 +1,5 @@
-// ─── types.ts — shared interfaces and constants ──────────────────────────────
 
-export const ASKDATA_API = "https://ask-data-response-model-gxb7aagkhqgpgvdr.canadacentral-01.azurewebsites.net";
+export const ASKDATA_API             = "https://ask-data-response-model-gxb7aagkhqgpgvdr.canadacentral-01.azurewebsites.net";
 export const TOP_K                   = 6;
 export const TEMPERATURE             = 0.6;
 export const MAX_TOKENS              = 1024;
@@ -42,6 +41,7 @@ export interface UIMessage {
     sources?:    Source[];
     timestamp:   Date;
     isTyping?:   boolean;
+    isError?:    boolean;   // true → render with error styling, never markdown-parsed
     tokenCount?: number;
 }
 

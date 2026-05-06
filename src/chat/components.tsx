@@ -163,7 +163,9 @@ export const MessageBubble: FC<MsgBubbleProps> = ({ msg, initials, providerLabel
     const avatarFontFamily = logoStyle.fontFamily
         ? `'${logoStyle.fontFamily}', var(--ac-sans)`
         : "var(--ac-serif)";
-    const renderedHtml = (!isUser && !msg.isTyping && msg.content)
+    // Error messages are plain text — never markdown-parsed or linkified
+    const isError      = !isUser && !!msg.isError;
+    const renderedHtml = (!isUser && !msg.isTyping && !isError && msg.content)
         ? linkifyHtml(md(msg.content))
         : "";
 
@@ -187,6 +189,28 @@ export const MessageBubble: FC<MsgBubbleProps> = ({ msg, initials, providerLabel
                         padding:"8px 12px",borderRadius:3,lineHeight:1.55,wordBreak:"break-word",
                     }}>
                         {msg.content}
+                    </div>
+                ) : isError ? (
+                    /* ── Error bubble — distinct styling, never markdown-parsed ── */
+                    <div style={{
+                        position:        "relative",
+                        backgroundColor: "rgba(192,57,43,.06)",
+                        border:          "1px solid rgba(192,57,43,.28)",
+                        borderRadius:    3,
+                        padding:         "10px 12px",
+                        display:         "flex",
+                        alignItems:      "flex-start",
+                        gap:             8,
+                    }}>
+                        <span style={{ fontSize: "1em", flexShrink: 0, marginTop: 1 }}>⚠️</span>
+                        <span style={{
+                            ...sharedFont,
+                            color:      "var(--ac-red)",
+                            lineHeight: 1.55,
+                            wordBreak:  "break-word",
+                        }}>
+                            {msg.content}
+                        </span>
                     </div>
                 ) : (
                     <div
