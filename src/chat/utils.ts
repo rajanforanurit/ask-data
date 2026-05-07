@@ -15,7 +15,7 @@ export function detectProvider(url: string): DetectedProvider {
         return { type: "gemini",    label: "Google Gemini",    color: "#4285F4", defaultModel: "gemini-2.5-flash",        modelOptions: MODEL_LISTS.gemini,    lockModel: false, lockPrompt: false };
     if (u.includes("api.anthropic.com"))
         return { type: "anthropic", label: "Anthropic Claude", color: "#c7522a", defaultModel: "claude-3-haiku-20240307", modelOptions: MODEL_LISTS.anthropic, lockModel: false, lockPrompt: false };
-    return { type: "custom", label: "Custom API", color: "#6c63ff", defaultModel: "", modelOptions: [], lockModel: false, lockPrompt: false };
+    return { type: "custom", label: "Ask Data", color: "#6c63ff", defaultModel: "", modelOptions: [], lockModel: false, lockPrompt: false };
 }
 
 // ── Markdown renderer ────────────────────────────────────────────────────────

@@ -12,10 +12,14 @@ import {
     verifyEndpoint, sendMessage, fetchOpenAIModels,
     apiListConversations, apiGetConversation,
     apiDeleteConversation, apiRenameConversation, apiVerifySession,
+    RATE_LIMIT_SENTINEL,
 } from "./chat/api";
 import { ConfigGateScreen, ExpiredScreen } from "./chat/screens";
 import { HistorySidebar }                   from "./chat/HistorySidebar";
 import { Header, ChatArea, ChatInputBar }   from "./chat/sections";
+
+// ─── Rate-limit constants (must match backend: 10 req / 2 min block) ──────────
+const RATE_LIMIT_BLOCK_SECONDS = 120; // 2 minutes
 
 // ─── Module-level session lock (survives React re-renders) ────────────────────
 let _lockedSession: Session | null = null;
@@ -31,18 +35,14 @@ function saveConfig(cfg: SavedConfig): void {
 }
 
 // ─── Error classification ─────────────────────────────────────────────────────
-// Translates raw Error messages into user-friendly copy.
-// NEVER returns "Something went wrong" — every error is specific and actionable.
 function classifyError(err: unknown): string {
     const msg = err instanceof Error ? err.message : String(err ?? "");
 
-    if (!msg || msg === "__EXPIRED__") return ""; // handled separately
+    if (!msg || msg === "__EXPIRED__" || msg === RATE_LIMIT_SENTINEL) return "";
 
-    // Timeout / AbortError
     if (msg.includes("timed out") || msg.includes("AbortError")) {
         return "The request took too long. The server may be under load — please try again.";
     }
-    // Network / offline
     if (
         msg.toLowerCase().includes("network") ||
         msg.toLowerCase().includes("failed to fetch") ||
@@ -50,26 +50,184 @@ function classifyError(err: unknown): string {
     ) {
         return "A network error occurred. Please check your connection and try again.";
     }
-    // Rate limit
     if (msg.includes("429") || msg.toLowerCase().includes("rate limit") || msg.toLowerCase().includes("quota")) {
         return "You've hit the API rate limit. Please wait a moment and try again.";
     }
-    // Backend overloaded (503 from Ask Data after retries)
     if (msg.includes("503") || msg.toLowerCase().includes("service unavailable")) {
         return "The AI service is temporarily overloaded. Please try again in a few seconds.";
     }
-    // Token / content filter
     if (msg.toLowerCase().includes("content") && msg.toLowerCase().includes("filter")) {
         return "The response was blocked by a content filter. Try rephrasing your question.";
     }
-    // Auth errors
     if (msg.includes("401") || msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("invalid api key")) {
         return "Authentication failed — your API key may be invalid or expired. Update it in the Format Pane.";
     }
-    // Fallback: use the raw message if it's reasonably short and readable
     if (msg.length > 0 && msg.length < 180) return msg;
     return "An unexpected error occurred. Please try again — if the problem persists, check your API configuration.";
 }
+
+// ─── Conversational shortcut matchers ────────────────────────────────────────
+
+/** Returns an instant reply string if the query matches a known shortcut, or null otherwise. */
+function matchShortcut(query: string, clientName: string): string | null {
+    const q = query.trim().toLowerCase().replace(/[?!.,]+$/, "");
+
+    // Identity questions
+    const identityPatterns = [
+        /^who are you$/,
+        /^what(?:'s| is) your name$/,
+        /^what are you$/,
+        /^tell me about yourself$/,
+        /^introduce yourself$/,
+        /^who(?:'s| is) this$/,
+        /^who am i (?:talking|speaking|chatting) (?:to|with)$/,
+        /^what(?:'s| is) ask data$/,
+    ];
+    if (identityPatterns.some(p => p.test(q))) {
+        return "I'm Adaptive RAG named as Ask Data built and trained by Anurit Innovation.";
+    }
+
+    // Greeting patterns — use the client name for a personalised welcome
+    const greetPatterns = [
+        /^h(?:i|ey|ello)$/,
+        /^good (?:morning|afternoon|evening|day)$/,
+        /^greetings$/,
+        /^howdy$/,
+        /^sup$/,
+        /^what(?:'s| is) up$/,
+        /^hey there$/,
+        /^hi there$/,
+    ];
+    const firstName = clientName.split(" ")[0] || clientName;
+    if (greetPatterns.some(p => p.test(q))) {
+        return `Hi, ${firstName}! Welcome to Ask Data. Ask your queries — I'm fully ready to answer with clarity.`;
+    }
+
+    return null;
+}
+
+// ─── Rate-limit popup component ───────────────────────────────────────────────
+const RateLimitModal: FC<{ secondsLeft: number; onDismiss: () => void }> = ({ secondsLeft, onDismiss }) => {
+    const mins = Math.floor(secondsLeft / 60);
+    const secs = secondsLeft % 60;
+    const formatted = `${mins}:${String(secs).padStart(2, "0")}`;
+    const progress  = secondsLeft / RATE_LIMIT_BLOCK_SECONDS;
+
+    return (
+        <div style={{
+            position:       "fixed",
+            inset:          0,
+            zIndex:         9999,
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "center",
+            background:     "rgba(10,20,40,0.55)",
+            backdropFilter: "blur(3px)",
+            animation:      "ac-cardIn .25s cubic-bezier(.16,1,.3,1) both",
+        }}>
+            <div style={{
+                width:        370,
+                maxWidth:     "92vw",
+                background:   "var(--ac-surface)",
+                borderRadius: 10,
+                boxShadow:    "0 24px 80px rgba(0,0,0,.28)",
+                border:       "1px solid var(--ac-border)",
+                overflow:     "hidden",
+                animation:    "ac-cardIn .3s cubic-bezier(.16,1,.3,1) both",
+            }}>
+                {/* Amber accent top bar */}
+                <div style={{ height: 4, background: "linear-gradient(90deg, #b8955a, #e6b97a)", borderRadius: "10px 10px 0 0" }} />
+
+                <div style={{ padding: "26px 28px 24px" }}>
+                    {/* Icon + heading */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                        <div style={{
+                            width:          42,
+                            height:         42,
+                            borderRadius:   "50%",
+                            background:     "rgba(184,149,90,.12)",
+                            border:         "1.5px solid rgba(184,149,90,.35)",
+                            display:        "flex",
+                            alignItems:     "center",
+                            justifyContent: "center",
+                            fontSize:       "1.35em",
+                            flexShrink:     0,
+                        }}>⏳</div>
+                        <div>
+                            <div style={{ fontFamily: "var(--ac-serif)", fontSize: "1.08em", fontWeight: 700, color: "var(--ac-navy)" }}>
+                                Request Limit Reached
+                            </div>
+                            <div style={{ fontSize: ".78em", color: "var(--ac-text3)", marginTop: 2 }}>
+                                Ask Data · Rate limit active
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Message */}
+                    <p style={{ fontSize: ".88em", color: "var(--ac-text2)", lineHeight: 1.65, margin: "0 0 20px" }}>
+                        You've exceeded the maximum number of requests allowed in this window.
+                        Chat will automatically resume when the timer expires — no action needed.
+                    </p>
+
+                    {/* Countdown ring + label */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginBottom: 20 }}>
+                        <div style={{ position: "relative", width: 80, height: 80 }}>
+                            <svg width="80" height="80" style={{ transform: "rotate(-90deg)" }}>
+                                <circle cx="40" cy="40" r="34" fill="none" stroke="var(--ac-border2)" strokeWidth="5" />
+                                <circle
+                                    cx="40" cy="40" r="34"
+                                    fill="none"
+                                    stroke="#b8955a"
+                                    strokeWidth="5"
+                                    strokeLinecap="round"
+                                    strokeDasharray={`${2 * Math.PI * 34}`}
+                                    strokeDashoffset={`${2 * Math.PI * 34 * (1 - progress)}`}
+                                    style={{ transition: "stroke-dashoffset 1s linear" }}
+                                />
+                            </svg>
+                            <div style={{
+                                position:       "absolute",
+                                inset:          0,
+                                display:        "flex",
+                                alignItems:     "center",
+                                justifyContent: "center",
+                                fontFamily:     "var(--ac-mono)",
+                                fontSize:       "1.05em",
+                                fontWeight:     700,
+                                color:          "var(--ac-navy)",
+                            }}>
+                                {formatted}
+                            </div>
+                        </div>
+                        <div style={{ fontSize: ".78em", color: "var(--ac-text3)" }}>resuming in</div>
+                    </div>
+
+                    {/* Dismiss */}
+                    <button
+                        onClick={onDismiss}
+                        style={{
+                            width:        "100%",
+                            padding:      "10px",
+                            background:   "var(--ac-surface2)",
+                            border:       "1px solid var(--ac-border)",
+                            borderRadius: 6,
+                            cursor:       "pointer",
+                            fontSize:     ".85em",
+                            fontWeight:   600,
+                            color:        "var(--ac-text2)",
+                            letterSpacing: ".02em",
+                            transition:   "background .15s, color .15s",
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = "var(--ac-gold-light)"; e.currentTarget.style.color = "var(--ac-gold)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "var(--ac-surface2)"; e.currentTarget.style.color = "var(--ac-text2)"; }}
+                    >
+                        Dismiss — I'll wait
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 export interface ChatAppProps {
@@ -111,8 +269,44 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
     const [conversations,  setConversations]  = useState<Conversation[]>([]);
     const [renaming,       setRenaming]       = useState<{ id: string; value: string } | null>(null);
 
+    // ── Rate-limit state ──────────────────────────────────────────────────────
+    const [rateLimited,      setRateLimited]      = useState(false);
+    const [modalVisible,     setModalVisible]      = useState(false);
+    const [countdownSeconds, setCountdownSeconds] = useState(0);
+    const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    /** Start (or restart) the 2-minute rate-limit countdown. */
+    const startRateLimit = useCallback(() => {
+        // Clear any existing timer to prevent duplication / memory leaks
+        if (countdownRef.current !== null) clearInterval(countdownRef.current);
+
+        setRateLimited(true);
+        setModalVisible(true);
+        setCountdownSeconds(RATE_LIMIT_BLOCK_SECONDS);
+
+        countdownRef.current = setInterval(() => {
+            setCountdownSeconds(prev => {
+                if (prev <= 1) {
+                    // Timer expired — lift rate-limit and clean up
+                    if (countdownRef.current !== null) clearInterval(countdownRef.current);
+                    countdownRef.current = null;
+                    setRateLimited(false);
+                    setModalVisible(false);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1_000);
+    }, []);
+
+    // Clean up interval on unmount
+    useEffect(() => {
+        return () => {
+            if (countdownRef.current !== null) clearInterval(countdownRef.current);
+        };
+    }, []);
+
     // ── Request guard — prevents duplicate concurrent sends ───────────────────
-    // A ref (not state) so it never triggers re-renders and is never stale inside closures.
     const sendingRef = useRef(false);
 
     const chatHistoryRef = useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
@@ -139,6 +333,12 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
                 chatHistoryRef.current = [];
                 setHistoryOpen(false);
                 setBusy(false);
+                // Clear any active rate-limit on config change
+                if (countdownRef.current !== null) clearInterval(countdownRef.current);
+                countdownRef.current = null;
+                setRateLimited(false);
+                setModalVisible(false);
+                setCountdownSeconds(0);
             }
         }
     }, [configKey]);
@@ -147,7 +347,7 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
     useEffect(() => {
         if (_lockedSession || keyExpired) return;
         if (effectiveEndpoint && effectiveApiKey) void attemptLogin();
-    }, [configKey]); 
+    }, [configKey]);
 
     // ── Periodic session keep-alive (Anurit only) ─────────────────────────────
     useEffect(() => {
@@ -248,13 +448,24 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
     }
 
     // ── Send message ──────────────────────────────────────────────────────────
-    // Uses a ref-based guard (sendingRef) so rapid clicks / Enter key spam
-    // cannot queue duplicate requests. The `busy` state drives the UI;
-    // the ref drives the logic — they are always in sync.
     const handleSend = useCallback(async () => {
         if (!input.trim() || sendingRef.current || !session) return;
+        if (rateLimited) return; // silently block while countdown is active
 
         const rawQ = input.trim();
+
+        // ── Shortcut: instant reply without API call ──────────────────────────
+        const shortcutReply = matchShortcut(rawQ, session.name ?? firstName);
+        if (shortcutReply !== null) {
+            setInput("");
+            if (textareaRef.current) textareaRef.current.style.height = "auto";
+            const userMsg: UIMessage = { id: `u-${Date.now()}`,  role: "user",      content: rawQ,          timestamp: new Date() };
+            const aiMsg:   UIMessage = { id: `a-${Date.now()}`,  role: "assistant",  content: shortcutReply, timestamp: new Date(), tokenCount: estimateTokens(shortcutReply) };
+            setMessages(prev => [...prev, userMsg, aiMsg]);
+            setTimeout(() => textareaRef.current?.focus(), 50);
+            return;
+        }
+
         sendingRef.current = true;    // lock immediately — before any awaits
         setInput("");
         if (textareaRef.current) textareaRef.current.style.height = "auto";
@@ -304,17 +515,23 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
             const msg = e instanceof Error ? e.message : "";
 
             if (msg === "__EXPIRED__") {
-                // Session truly expired — show the expired screen
                 _lockedSession     = null;
                 sendingRef.current = false;
                 setSession(null);
                 setKeyExpired(true);
                 setMessages(prev => prev.filter(m => !m.isTyping));
-                // Don't reset busy/sendingRef here — component will unmount
                 return;
             }
 
-            // Classify and display a specific, actionable error message
+            // ── Rate-limit sentinel: activate popup + countdown ───────────────
+            if (msg === RATE_LIMIT_SENTINEL) {
+                setMessages(prev => prev.filter(m => !m.isTyping));
+                startRateLimit();
+                sendingRef.current = false;
+                setBusy(false);
+                return;
+            }
+
             const friendlyError = classifyError(e);
             setMessages(prev => [...prev.filter(m => !m.isTyping), {
                 id:        `err-${Date.now()}`,
@@ -329,7 +546,7 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
             setBusy(false);
             setTimeout(() => textareaRef.current?.focus(), 50);
         }
-    }, [input, session, activeConvId]); // `busy` intentionally excluded — sendingRef is the guard
+    }, [input, session, activeConvId, rateLimited, firstName, startRateLimit]);
 
     // ── Keyboard / input handlers ─────────────────────────────────────────────
     const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -369,8 +586,21 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
     const isAnurit = prov.type === "anurit";
     const placeholder = isAnurit ? "Ask about your documents…" : `Ask ${prov.label} anything…`;
 
+    // Countdown formatted string for the above-input banner
+    const countdownMins = Math.floor(countdownSeconds / 60);
+    const countdownSecs = countdownSeconds % 60;
+    const countdownFormatted = `${countdownMins}:${String(countdownSecs).padStart(2, "0")}`;
+
     return (
         <div className="askdata-visual" style={{ width: w, height: h, display: "flex", flexDirection: "column" }}>
+            {/* Rate-limit modal overlay */}
+            {modalVisible && (
+                <RateLimitModal
+                    secondsLeft={countdownSeconds}
+                    onDismiss={() => setModalVisible(false)}
+                />
+            )}
+
             <Header
                 firstName={firstName}
                 providerLabel={prov.label}
@@ -415,10 +645,38 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
                         theme={theme}
                         messagesEndRef={messagesEndRef}
                     />
+
+                    {/* ── Countdown banner (above chatbox, only while rate-limited) ── */}
+                    {rateLimited && (
+                        <div style={{
+                            flexShrink:     0,
+                            display:        "flex",
+                            alignItems:     "center",
+                            justifyContent: "center",
+                            gap:            8,
+                            padding:        "6px 14px",
+                            background:     "rgba(184,149,90,.08)",
+                            borderTop:      "1px solid rgba(184,149,90,.25)",
+                            borderBottom:   "1px dashed rgba(184,149,90,.25)",
+                        }}>
+                            <span style={{ fontSize: ".8em" }}>⏳</span>
+                            <span style={{ fontSize: ".8em", color: "var(--ac-gold)", fontWeight: 600, fontFamily: "var(--ac-sans)" }}>
+                                Rate limit active — chat resumes in{" "}
+                                <span style={{ fontFamily: "var(--ac-mono)", fontWeight: 700 }}>{countdownFormatted}</span>
+                            </span>
+                            <button
+                                onClick={() => setModalVisible(true)}
+                                style={{ marginLeft: 4, fontSize: ".74em", color: "var(--ac-gold)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}
+                            >
+                                Details
+                            </button>
+                        </div>
+                    )}
+
                     <ChatInputBar
                         input={input}
-                        busy={busy}
-                        placeholder={placeholder}
+                        busy={busy || rateLimited}
+                        placeholder={rateLimited ? `Chat locked — resumes in ${countdownFormatted}` : placeholder}
                         providerColor={prov.color}
                         theme={theme}
                         textareaRef={textareaRef}

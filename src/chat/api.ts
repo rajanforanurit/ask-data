@@ -2,11 +2,15 @@ import { ASKDATA_API, TOP_K, TEMPERATURE, MAX_TOKENS } from "./types";
 import type { Session, Source } from "./types";
 import { detectProvider } from "./utils";
 
-const DEFAULT_TIMEOUT_MS  = 45_000;   
-const MAX_RETRIES         = 2;       
-const RETRY_BASE_DELAY_MS = 600;      
-const CACHE_TTL_MS        = 60_000;  
-const CACHE_MAX_SIZE      = 40;      
+const DEFAULT_TIMEOUT_MS  = 45_000;
+const MAX_RETRIES         = 2;
+const RETRY_BASE_DELAY_MS = 600;
+const CACHE_TTL_MS        = 60_000;
+const CACHE_MAX_SIZE      = 40;
+
+// ─── Special sentinel thrown when the backend rate-limits this client ─────────
+// ChatApp catches "__RATE_LIMITED__" and activates the countdown UI.
+export const RATE_LIMIT_SENTINEL = "__RATE_LIMITED__";
 
 function fetchWithTimeout(
     url:       string,
@@ -34,8 +38,13 @@ async function fetchWithRetry(
             if (response.status === 401 || response.status === 403 || response.status === 400) {
                 return response;
             }
-            // Retry on rate-limit or server overload
-            if ((response.status === 429 || response.status >= 500) && attempt < maxRetries) {
+            // Rate-limit from Ask Data backend: surface immediately — no retry.
+            // The backend blocks the client_id for 2 minutes; retrying wastes quota.
+            if (response.status === 429) {
+                return response;
+            }
+            // Retry on server overload only
+            if (response.status >= 500 && attempt < maxRetries) {
                 const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
                 await new Promise(r => setTimeout(r, delay));
                 continue;
@@ -82,11 +91,13 @@ function cacheSet(key: string, value: CacheEntry["value"]): void {
     }
     _responseCache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
 }
+
 const _inFlight = new Map<string, Promise<{ answer: string; sources?: Source[]; conversationId?: string }>>();
 
 function makeFingerprint(clientId: string, query: string, convId: string | null): string {
     return `${clientId}::${query}::${convId ?? ""}`;
 }
+
 export async function fetchOpenAIModels(endpoint: string, apiKey: string): Promise<string[]> {
     try {
         const base = endpoint.replace(/\/v1\/.*$/, "");
@@ -184,6 +195,7 @@ export async function verifyEndpoint(
         }
     }
 }
+
 export async function sendMessage(
     session:        Session,
     query:          string,
@@ -192,7 +204,7 @@ export async function sendMessage(
 ): Promise<{ answer: string; sources?: Source[]; conversationId?: string }> {
     const prov = detectProvider(session.endpointUrl);
     if (prov.type === "anurit") {
-        const fp    = makeFingerprint(session.clientId, query, conversationId);
+        const fp     = makeFingerprint(session.clientId, query, conversationId);
         const cached = cacheGet(fp);
         if (cached) return cached;
 
@@ -238,8 +250,14 @@ async function _sendAnurit(
 
             if (r.status === 401) throw new Error("__EXPIRED__");
 
-            // Retry on 429 / 5xx
-            if ((r.status === 429 || r.status >= 500) && attempt < MAX_RETRIES) {
+            // Rate-limit: backend blocked this client_id for 2 minutes.
+            // Throw sentinel — ChatApp will activate the countdown UI.
+            if (r.status === 429) {
+                throw new Error(RATE_LIMIT_SENTINEL);
+            }
+
+            // Retry on 5xx only (429 is handled above)
+            if (r.status >= 500 && attempt < MAX_RETRIES) {
                 await new Promise(res => setTimeout(res, RETRY_BASE_DELAY_MS * Math.pow(2, attempt)));
                 continue;
             }
@@ -267,7 +285,12 @@ async function _sendAnurit(
                 conversationId: d.conversationId,
             };
         } catch (err) {
-            if (err instanceof Error && err.message === "__EXPIRED__") throw err;
+            // Propagate sentinels immediately — no retry
+            if (err instanceof Error && (
+                err.message === "__EXPIRED__" ||
+                err.message === RATE_LIMIT_SENTINEL
+            )) throw err;
+
             if (err instanceof Error && err.name === "AbortError") {
                 lastErr = new Error("The request timed out. The server may be under load — please try again.");
                 if (attempt < MAX_RETRIES) {
@@ -374,7 +397,7 @@ async function _sendGeneric(
         }
 
         default: {
-            // Custom / unknown provider
+            // Custom / unknown provider — uses Ask Data branding label in UI
             const messages: Array<{ role: string; content: string }> = [];
             if (session.systemPrompt) messages.push({ role: "system", content: session.systemPrompt });
             messages.push(...history.map(m => ({ role: m.role, content: m.content })));
@@ -469,7 +492,7 @@ export async function apiVerifySession(apiKey: string): Promise<boolean> {
         const r = await fetchWithTimeout(
             `${ASKDATA_API}/client/verify`,
             { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` } },
-            10_000, // quick check — 10 s is plenty
+            10_000,
         );
         return r.status !== 401;
     } catch {
