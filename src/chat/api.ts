@@ -8,10 +8,6 @@ const RETRY_BASE_DELAY_MS = 600;
 const CACHE_TTL_MS        = 60_000;
 const CACHE_MAX_SIZE      = 40;
 
-// ─── Special sentinel thrown when the backend rate-limits this client ─────────
-// ChatApp catches "__RATE_LIMITED__" and activates the countdown UI.
-export const RATE_LIMIT_SENTINEL = "__RATE_LIMITED__";
-
 function fetchWithTimeout(
     url:       string,
     options:   RequestInit,
@@ -25,9 +21,9 @@ function fetchWithTimeout(
 }
 
 async function fetchWithRetry(
-    url:       string,
-    options:   RequestInit,
-    timeoutMs: number = DEFAULT_TIMEOUT_MS,
+    url:        string,
+    options:    RequestInit,
+    timeoutMs:  number = DEFAULT_TIMEOUT_MS,
     maxRetries: number = MAX_RETRIES,
 ): Promise<Response> {
     let lastError: unknown;
@@ -36,11 +32,6 @@ async function fetchWithRetry(
             const response = await fetchWithTimeout(url, options, timeoutMs);
             // Don't retry client auth errors — they will never succeed
             if (response.status === 401 || response.status === 403 || response.status === 400) {
-                return response;
-            }
-            // Rate-limit from Ask Data backend: surface immediately — no retry.
-            // The backend blocks the client_id for 2 minutes; retrying wastes quota.
-            if (response.status === 429) {
                 return response;
             }
             // Retry on server overload only
@@ -85,7 +76,6 @@ function cacheGet(key: string): CacheEntry["value"] | null {
 
 function cacheSet(key: string, value: CacheEntry["value"]): void {
     if (_responseCache.size >= CACHE_MAX_SIZE) {
-        // Evict the oldest entry (Map preserves insertion order)
         const firstKey = _responseCache.keys().next().value;
         if (firstKey !== undefined) _responseCache.delete(firstKey);
     }
@@ -124,16 +114,29 @@ export async function verifyEndpoint(
 
     switch (prov.type) {
         case "anurit": {
+            // Use /client/verify for key validation, then /chat/login to warm up chunk cache
             const r = await fetchWithRetry(
-                `${ASKDATA_API}/chat/login`,
+                `${ASKDATA_API}/client/verify`,
                 {
                     method:  "POST",
                     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
                     body:    JSON.stringify({ apiKey }),
                 },
             );
-            const d = await r.json() as { error?: string; client?: { clientId: string; name?: string } };
-            if (!r.ok) throw new Error(d.error ?? "Ask Data login failed — check your API key.");
+            const d = await r.json() as { error?: string; valid?: boolean; client?: { clientId: string; name?: string } };
+            if (!r.ok || !d.valid) throw new Error(d.error ?? "Ask Data login failed — check your API key.");
+
+            // Fire-and-forget: warm up the chunk cache for this client
+            fetchWithTimeout(
+                `${ASKDATA_API}/chat/login`,
+                {
+                    method:  "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+                    body:    JSON.stringify({ apiKey }),
+                },
+                30_000,
+            ).catch(() => undefined);
+
             return { clientId: d.client!.clientId, name: d.client!.name ?? d.client!.clientId };
         }
 
@@ -213,7 +216,6 @@ export async function sendMessage(
 
         const promise = _sendAnurit(session, query, conversationId)
             .then(result => {
-                // Cache successful responses only
                 if (result.answer) cacheSet(fp, result);
                 return result;
             })
@@ -250,13 +252,7 @@ async function _sendAnurit(
 
             if (r.status === 401) throw new Error("__EXPIRED__");
 
-            // Rate-limit: backend blocked this client_id for 2 minutes.
-            // Throw sentinel — ChatApp will activate the countdown UI.
-            if (r.status === 429) {
-                throw new Error(RATE_LIMIT_SENTINEL);
-            }
-
-            // Retry on 5xx only (429 is handled above)
+            // Retry on 5xx
             if (r.status >= 500 && attempt < MAX_RETRIES) {
                 await new Promise(res => setTimeout(res, RETRY_BASE_DELAY_MS * Math.pow(2, attempt)));
                 continue;
@@ -285,11 +281,8 @@ async function _sendAnurit(
                 conversationId: d.conversationId,
             };
         } catch (err) {
-            // Propagate sentinels immediately — no retry
-            if (err instanceof Error && (
-                err.message === "__EXPIRED__" ||
-                err.message === RATE_LIMIT_SENTINEL
-            )) throw err;
+            // Propagate __EXPIRED__ immediately — no retry
+            if (err instanceof Error && err.message === "__EXPIRED__") throw err;
 
             if (err instanceof Error && err.name === "AbortError") {
                 lastErr = new Error("The request timed out. The server may be under load — please try again.");
@@ -397,7 +390,6 @@ async function _sendGeneric(
         }
 
         default: {
-            // Custom / unknown provider — uses Ask Data branding label in UI
             const messages: Array<{ role: string; content: string }> = [];
             if (session.systemPrompt) messages.push({ role: "system", content: session.systemPrompt });
             messages.push(...history.map(m => ({ role: m.role, content: m.content })));

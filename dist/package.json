@@ -1,0 +1,17 @@
+{
+		"version": "1.0.0.0",
+		"author": {"name":"Rajan Singh","email":"rajan.singh@anuritinnovation.com"},
+		"resources": [
+			{
+				"resourceId": "rId0",
+				"sourceType": 5,
+				"file": "resources/anuritcpbivA2DC55DC7ED94172B45FDFF0D3F2ED54.pbiviz.json"
+			}
+		],
+		"visual": {"name":"anuritcpbiv","displayName":"anuritcpbiv","guid":"anuritcpbivA2DC55DC7ED94172B45FDFF0D3F2ED54","visualClassName":"Visual","version":"1.0.0.0","description":"Anurit Chat Visual In Power BI","supportUrl":"https://anuritinnovation.com","gitHubUrl":"https://github.com/rajanforanurit"},
+		"metadata": {
+			"pbivizjson": {
+				"resourceId": "rId0"
+			}
+		}
+	}
