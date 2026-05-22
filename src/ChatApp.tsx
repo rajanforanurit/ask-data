@@ -3,7 +3,7 @@ import {
     type FC, type KeyboardEvent, type ChangeEvent,
 } from "react";
 import type { VisualFormattingSettingsModel } from "./settings";
-import { DEFAULT_SYSTEM_PROMPT }              from "./settings";
+import { DEFAULT_SYSTEM_PROMPT } from "./settings";
 import { ASKDATA_API, SESSION_VERIFY_INTERVAL, STORAGE_KEY } from "./chat/types";
 import type { Session, UIMessage, Conversation, SavedConfig } from "./chat/types";
 import { detectProvider, resolveSystemPrompt, estimateTokens, cleanAnswer } from "./chat/utils";
@@ -14,36 +14,25 @@ import {
     apiDeleteConversation, apiRenameConversation, apiVerifySession,
 } from "./chat/api";
 import { ConfigGateScreen, ExpiredScreen } from "./chat/screens";
-import { HistorySidebar }                   from "./chat/HistorySidebar";
-import { Header, ChatArea, ChatInputBar }   from "./chat/sections";
-
-// ─── Module-level session lock (survives React re-renders) ────────────────────
+import { HistorySidebar } from "./chat/HistorySidebar";
+import { Header, ChatArea, ChatInputBar } from "./chat/sections";
+import { resolveIntent } from "./chat/intentHandler";
 let _lockedSession: Session | null = null;
-
-// ─── Config persistence ───────────────────────────────────────────────────────
 function loadSavedConfig(): SavedConfig | null {
-    try   { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as SavedConfig : null; }
+    try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as SavedConfig : null; }
     catch { return null; }
 }
 function saveConfig(cfg: SavedConfig): void {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); }
-    catch { /* localStorage unavailable (Power BI sandboxed iframe) */ }
+    catch { }
 }
-
-// ─── Error classification ─────────────────────────────────────────────────────
 function classifyError(err: unknown): string {
     const msg = err instanceof Error ? err.message : String(err ?? "");
-
     if (!msg || msg === "__EXPIRED__") return "";
-
     if (msg.includes("timed out") || msg.includes("AbortError")) {
         return "The request took too long. The server may be under load — please try again.";
     }
-    if (
-        msg.toLowerCase().includes("network") ||
-        msg.toLowerCase().includes("failed to fetch") ||
-        msg.toLowerCase().includes("networkerror")
-    ) {
+    if (msg.toLowerCase().includes("network") || msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("networkerror")) {
         return "A network error occurred. Please check your connection and try again.";
     }
     if (msg.includes("503") || msg.toLowerCase().includes("service unavailable")) {
@@ -58,100 +47,42 @@ function classifyError(err: unknown): string {
     if (msg.length > 0 && msg.length < 180) return msg;
     return "An unexpected error occurred. Please try again — if the problem persists, check your API configuration.";
 }
-
-// ─── Conversational shortcut matchers ────────────────────────────────────────
-
-/** Returns an instant reply string if the query matches a known shortcut, or null otherwise. */
-function matchShortcut(query: string, clientName: string): string | null {
-    const q = query.trim().toLowerCase().replace(/[?!.,]+$/, "");
-
-    // Identity questions
-    const identityPatterns = [
-        /^who are you$/,
-        /^what(?:'s| is) your name$/,
-        /^what are you$/,
-        /^tell me about yourself$/,
-        /^introduce yourself$/,
-        /^who(?:'s| is) this$/,
-        /^who am i (?:talking|speaking|chatting) (?:to|with)$/,
-        /^what(?:'s| is) ask data$/,
-    ];
-    if (identityPatterns.some(p => p.test(q))) {
-        return "I'm Adaptive RAG named as Ask Data built and trained by Anurit Innovation.";
-    }
-
-    // Greeting patterns — use the client name for a personalised welcome
-    const greetPatterns = [
-        /^h(?:i|ey|ello)$/,
-        /^good (?:morning|afternoon|evening|day)$/,
-        /^greetings$/,
-        /^howdy$/,
-        /^sup$/,
-        /^what(?:'s| is) up$/,
-        /^hey there$/,
-        /^hi there$/,
-    ];
-    const firstName = clientName.split(" ")[0] || clientName;
-    if (greetPatterns.some(p => p.test(q))) {
-        return `Hi, ${firstName}! Welcome to Ask Data. Ask your queries — I'm fully ready to answer with clarity.`;
-    }
-
-    return null;
-}
-
-// ─── Props ────────────────────────────────────────────────────────────────────
 export interface ChatAppProps {
     settings: VisualFormattingSettingsModel | null;
     username: string | null;
     viewport: { width: number; height: number };
 }
-
-// ─── Component ────────────────────────────────────────────────────────────────
 const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
-    // ── Theme / styles ────────────────────────────────────────────────────────
     const theme = resolveTheme(settings);
     useEffect(() => { injectStyles(theme); });
-
-    // ── Effective config (Format Pane wins; localStorage is fallback) ─────────
     const settingsEndpoint = settings?.aiConfig?.endpointUrl?.trim() ?? "";
     const settingsApiKey   = settings?.aiConfig?.apiKey?.trim()      ?? "";
     const settingsModel    = settings?.aiConfig?.modelName?.trim()   ?? "";
     const settingsPrompt   = settings?.aiConfig?.systemPrompt        ?? "";
     const saved            = loadSavedConfig();
-
     const effectiveEndpoint = settingsEndpoint || saved?.endpointUrl || "";
     const effectiveApiKey   = settingsApiKey   || saved?.apiKey      || "";
     const effectiveModel    = settingsModel    || saved?.modelName   || "";
     const effectivePrompt   = settingsPrompt   || saved?.systemPrompt || "";
-
-    // ── Core state ────────────────────────────────────────────────────────────
     const [session,      setSession]      = useState<Session | null>(() => _lockedSession);
     const [loginLoading, setLoginLoading] = useState(false);
     const [loginError,   setLoginError]   = useState("");
     const [keyExpired,   setKeyExpired]   = useState(false);
-
     const [messages,     setMessages]     = useState<UIMessage[]>([]);
     const [input,        setInput]        = useState("");
     const [busy,         setBusy]         = useState(false);
     const [activeConvId, setActiveConvId] = useState<string | null>(null);
-
     const [historyOpen,   setHistoryOpen]   = useState(false);
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [renaming,      setRenaming]      = useState<{ id: string; value: string } | null>(null);
-
-    // ── Request guard — prevents duplicate concurrent sends ───────────────────
-    const sendingRef = useRef(false);
-
+    const sendingRef     = useRef(false);
     const chatHistoryRef = useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef    = useRef<HTMLTextAreaElement>(null);
-
     const displayName = username ?? session?.name ?? "User";
     const firstName   = displayName.split(" ")[0] || displayName;
     const initials    = firstName[0]?.toUpperCase() ?? "U";
     const configKey   = `${effectiveEndpoint}__${effectiveApiKey}`;
-
-    // ── Config change detection ───────────────────────────────────────────────
     useEffect(() => {
         if (_lockedSession) {
             const prev = `${_lockedSession.endpointUrl}__${_lockedSession.apiKey}`;
@@ -169,14 +100,10 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
             }
         }
     }, [configKey]);
-
-    // ── Auto-login ────────────────────────────────────────────────────────────
     useEffect(() => {
         if (_lockedSession || keyExpired) return;
         if (effectiveEndpoint && effectiveApiKey) void attemptLogin();
     }, [configKey]);
-
-    // ── Periodic session keep-alive (Anurit only) ─────────────────────────────
     useEffect(() => {
         if (!session || detectProvider(session.endpointUrl).type !== "anurit") return;
         const id = setInterval(async () => {
@@ -185,21 +112,16 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
         }, SESSION_VERIFY_INTERVAL);
         return () => clearInterval(id);
     }, [session]);
-
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-
     useEffect(() => {
         if (!session || detectProvider(session.endpointUrl).type !== "anurit") return;
         void loadConversations();
     }, [session]);
-
-    // ── Conversation CRUD ─────────────────────────────────────────────────────
     async function loadConversations() {
         if (!session) return;
         const d = await apiListConversations(session.apiKey);
         if (d) setConversations(d.conversations ?? []);
     }
-
     async function openConversation(id: string) {
         if (!session) return;
         const d = await apiGetConversation(session.apiKey, id);
@@ -215,7 +137,6 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
         })));
         setHistoryOpen(false);
     }
-
     function startNewChat() {
         setActiveConvId(null);
         setMessages([]);
@@ -223,7 +144,6 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
         setHistoryOpen(false);
         setTimeout(() => textareaRef.current?.focus(), 50);
     }
-
     async function deleteConversation(id: string) {
         if (!session || !confirm("Delete this conversation?")) return;
         const ok = await apiDeleteConversation(session.apiKey, id);
@@ -234,15 +154,12 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
             alert("Failed to delete conversation — please try again.");
         }
     }
-
     async function commitRename(id: string, newTitle: string) {
         setRenaming(null);
         if (!session || !newTitle.trim()) return;
         const ok = await apiRenameConversation(session.apiKey, id, newTitle.trim());
         if (ok) setConversations(prev => prev.map(c => c._id === id ? { ...c, title: newTitle.trim() } : c));
     }
-
-    // ── Login / verify ────────────────────────────────────────────────────────
     async function attemptLogin() {
         const endpoint = effectiveEndpoint;
         const key      = effectiveApiKey;
@@ -273,40 +190,30 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
             setLoginLoading(false);
         }
     }
-
-    // ── Send message ──────────────────────────────────────────────────────────
     const handleSend = useCallback(async () => {
         if (!input.trim() || sendingRef.current || !session) return;
-
         const rawQ = input.trim();
-
-        // ── Shortcut: instant reply without API call ──────────────────────────
-        const shortcutReply = matchShortcut(rawQ, session.name ?? firstName);
-        if (shortcutReply !== null) {
+        const intentResult = resolveIntent(rawQ);
+        if (intentResult !== null) {
             setInput("");
             if (textareaRef.current) textareaRef.current.style.height = "auto";
-            const userMsg: UIMessage = { id: `u-${Date.now()}`, role: "user",      content: rawQ,          timestamp: new Date() };
-            const aiMsg:   UIMessage = { id: `a-${Date.now()}`, role: "assistant",  content: shortcutReply, timestamp: new Date(), tokenCount: estimateTokens(shortcutReply) };
+            const userMsg: UIMessage = { id: `u-${Date.now()}`, role: "user",      content: rawQ,                  timestamp: new Date() };
+            const aiMsg:   UIMessage = { id: `a-${Date.now()}`, role: "assistant",  content: intentResult.response, timestamp: new Date(), tokenCount: estimateTokens(intentResult.response) };
             setMessages(prev => [...prev, userMsg, aiMsg]);
             setTimeout(() => textareaRef.current?.focus(), 50);
             return;
         }
-
-        sendingRef.current = true;    // lock immediately — before any awaits
+        sendingRef.current = true;
         setInput("");
         if (textareaRef.current) textareaRef.current.style.height = "auto";
         setBusy(true);
-
         const userMsg:   UIMessage = { id: `u-${Date.now()}`,  role: "user",      content: rawQ, timestamp: new Date() };
         const typingMsg: UIMessage = { id: `ty-${Date.now()}`, role: "assistant", content: "",   timestamp: new Date(), isTyping: true };
         setMessages(prev => [...prev, userMsg, typingMsg]);
-
         const prov     = detectProvider(session.endpointUrl);
         const isAnurit = prov.type === "anurit";
-
         try {
             const result = await sendMessage(session, rawQ, chatHistoryRef.current, activeConvId);
-
             if (!isAnurit) {
                 chatHistoryRef.current = [
                     ...chatHistoryRef.current,
@@ -314,7 +221,6 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
                     { role: "assistant", content: result.answer },
                 ];
             }
-
             if (isAnurit && result.conversationId && !activeConvId) {
                 setActiveConvId(result.conversationId);
                 setConversations(prev => [{
@@ -323,11 +229,9 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
                     updatedAt: new Date().toISOString(),
                 }, ...prev]);
             }
-
             const answerContent = isAnurit
                 ? cleanAnswer(result.answer ?? "", result.sources ?? [])
                 : (result.answer ?? "");
-
             setMessages(prev => [...prev.filter(m => !m.isTyping), {
                 id:         `a-${Date.now()}`,
                 role:       "assistant",
@@ -336,10 +240,8 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
                 timestamp:  new Date(),
                 tokenCount: estimateTokens(answerContent),
             }]);
-
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : "";
-
             if (msg === "__EXPIRED__") {
                 _lockedSession     = null;
                 sendingRef.current = false;
@@ -348,7 +250,6 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
                 setMessages(prev => prev.filter(m => !m.isTyping));
                 return;
             }
-
             const friendlyError = classifyError(e);
             setMessages(prev => [...prev.filter(m => !m.isTyping), {
                 id:        `err-${Date.now()}`,
@@ -357,31 +258,23 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
                 timestamp: new Date(),
                 isError:   true,
             } as UIMessage]);
-
         } finally {
             sendingRef.current = false;
             setBusy(false);
             setTimeout(() => textareaRef.current?.focus(), 50);
         }
     }, [input, session, activeConvId, firstName]);
-
-    // ── Keyboard / input handlers ─────────────────────────────────────────────
     const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); }
     }, [handleSend]);
-
     const handleInputChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
         setInput(e.target.value);
         const el = e.target;
         el.style.height = "auto";
         el.style.height = Math.min(el.scrollHeight, 100) + "px";
     }, []);
-
-    // ── Dimensions ────────────────────────────────────────────────────────────
     const w = viewport.width  || "100%";
     const h = viewport.height || "100%";
-
-    // ── Guard screens ─────────────────────────────────────────────────────────
     if (keyExpired) {
         const prov = session ? detectProvider(session.endpointUrl) : { label: "AI" };
         return <ExpiredScreen w={w} h={h} providerLabel={prov.label} />;
@@ -398,11 +291,9 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
             />
         );
     }
-
     const prov     = detectProvider(session.endpointUrl);
     const isAnurit = prov.type === "anurit";
     const placeholder = isAnurit ? "Ask about your documents…" : `Ask ${prov.label} anything…`;
-
     return (
         <div className="askdata-visual" style={{ width: w, height: h, display: "flex", flexDirection: "column" }}>
             <Header
@@ -465,5 +356,4 @@ const ChatApp: FC<ChatAppProps> = ({ settings, username, viewport }) => {
         </div>
     );
 };
-
 export default ChatApp;
